@@ -25,9 +25,9 @@
 #   May be overriden if the rh_certificate_consumer_host_key fact is found
 #
 # @param package_name
-#   Package name for Ruby foreman_scap_client package
+#   Package name for foreman_scap_client package
 #
-# @param package_provider 
+# @param package_provider
 #   provider for the package, defaults to yum but can be set to gem, or any other valid
 #   puppet package provider
 #
@@ -80,6 +80,9 @@
 # @param timeout
 #   Timeout when sending reports to proxy
 #
+# @param obsolete
+#   Whether to use the obsolete client wrapper in Ruby
+#
 # @example Run a weekly SCAP audit
 #   class { foreman_scap_client:
 #     server           => 'proxy.example.com',
@@ -110,7 +113,7 @@ class foreman_scap_client (
   Stdlib::Absolutepath $ca_file = $foreman_scap_client::params::ca_file,
   Stdlib::Absolutepath $host_certificate = $foreman_scap_client::params::host_certificate,
   Stdlib::Absolutepath $host_private_key = $foreman_scap_client::params::host_private_key,
-  String $package_name = 'rubygem-foreman_scap_client',
+  Optional[String] $package_name = undef,
   Optional[String] $package_provider = undef,
   Optional[String] $foreman_repo_rel = undef,
   String $foreman_repo_key = 'https://yum.theforeman.org/RPM-GPG-KEY-foreman',
@@ -120,8 +123,25 @@ class foreman_scap_client (
   String $cron_template = 'foreman_scap_client/cron.erb',
   Integer[0] $cron_splay = 600,
   Integer[0] $timeout = 60,
+  Boolean $obsolete = false,
 ) inherits foreman_scap_client::params {
   $cron_sleep = fqdn_rand($cron_splay)
+
+  if $obsolete {
+    if $package_name {
+      $real_package_name = $package_name
+    }
+    else {
+      $real_package_name = 'rubygem-foreman_scap_client'
+    }
+    $config_path = '/etc/foreman_scap_client/config.yaml'
+    $template_path = 'foreman_scap_client/config.yaml.erb'
+  }
+  else {
+    $real_package_name = 'foreman_scap_client_bash'
+    $config_path = '/etc/foreman_scap_client/config'
+    $template_path = 'foreman_scap_client/config.erb'
+  }
 
   if $foreman_repo_rel {
     if $foreman_repo_key =~ /^http/ {
@@ -160,11 +180,11 @@ class foreman_scap_client (
       baseurl  => $baseurl,
       gpgkey   => $gpgkey,
       gpgcheck => $foreman_repo_gpg_chk,
-      before   => Package[$package_name],
+      before   => Package[$real_package_name],
     }
   }
 
-  package { $package_name:
+  package { $real_package_name:
     ensure          => $ensure,
     install_options => $install_options,
     provider        => $package_provider,
@@ -176,8 +196,8 @@ class foreman_scap_client (
 
   file { 'foreman_scap_client':
     ensure  => file,
-    path    => '/etc/foreman_scap_client/config.yaml',
-    content => template('foreman_scap_client/config.yaml.erb'),
+    path    => $config_path,
+    content => template($template_path),
     owner   => 'root',
   }
 

@@ -11,6 +11,7 @@ describe 'foreman_scap_client' do
             server: 'foreman-proxy.example.com',
             port: 8443,
             policies: [],
+            obsolete: true,
           }
         end
 
@@ -39,6 +40,29 @@ describe 'foreman_scap_client' do
               .with_content(%r{^:ca_file: '/etc/rhsm/ca/redhat-uep\.pem'$})
               .with_content(%r{^:host_certificate: '/etc/rhsm/host/cert\.pem'$})
               .with_content(%r{^:host_private_key: '/etc/rhsm/host/key\.pem'$})
+          end
+        end
+
+        context 'install bash version by default' do
+          let(:params) do
+            super().merge({
+              obsolete: false,
+              policies: [
+                {
+                  id: 1,
+                  profile_id: 'default',
+                  content_path: '/usr/share/xml/scap/ssg/content/ssg-rhel7-ds.xml',
+                }
+              ]
+            })
+          end
+
+          it { is_expected.to compile.with_all_deps }
+          it do
+            is_expected.to contain_file('foreman_scap_client')
+              .with_path('/etc/foreman_scap_client/config')
+              .with_content(%r{^POLICY_1_PROFILE="default"$})
+              .with_content(%r{^POLICY_1_CONTENT_PATH="/usr/share/xml/scap/ssg/content/ssg-rhel7-ds.xml"$})
           end
         end
       end
